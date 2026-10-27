@@ -24,6 +24,33 @@ from src.config import COST_BPS, OUT, PROCESSED, RAW, SETUP  # noqa: E402
 
 SYMS = SETUP["universe"]["symbols"]
 MODELS = {"lgbm": "LightGBM", "ridge": "Ridge", "rule": "規則（-funding z）"}
+
+
+def L(zh: str, en: str) -> str:
+    """Pick the string for the current UI language (English by default)."""
+    return zh if st.session_state.get("lang", "EN") == "中文" else en
+
+
+def mname(m: str) -> str:
+    return L(MODELS.get(m, m), {"rule": "Rule (-funding z)"}.get(m, MODELS.get(m, m)))
+
+
+# Chinese strings that come from saved research outputs (risk.json, results.json, triage.csv, live_signal.py)
+DATA_EN = {
+    "全部": "All", "低波動": "Low vol", "中波動": "Mid vol", "高波動": "High vol",
+    "低波動・上漲": "Low vol · up", "低波動・下跌": "Low vol · down", "中波動・上漲": "Mid vol · up",
+    "中波動・下跌": "Mid vol · down", "高波動・上漲": "High vol · up", "高波動・下跌": "High vol · down",
+    "價差 x3（每邊 11 bp）": "Spread x3 (11 bp per side)", "未恢復": "not recovered", "已恢復": "recovered",
+    "只有在成本前為正（扣成本後消失）": "Positive before costs only (gone after costs)",
+    "硬底線（< 1 倍成本）": "Hard floor (< 1x cost)", "灰色地帶（1–2 倍）": "Grey zone (1–2x)", "舒適區（> 2 倍）": "Comfort zone (> 2x)",
+    "訊號": "signal", "狀態": "state",
+    "做空（最擠）": "Short (most crowded)", "做多（最不擠）": "Long (least crowded)",
+}
+
+
+def tr(x):
+    """Translate a data value into English when the UI is in English."""
+    return DATA_EN.get(x, x) if isinstance(x, str) and st.session_state.get("lang", "EN") != "中文" else x
 LADDER = SETUP["portfolio_extras"]["drawdown_ladder"]
 LADDER_OFF = {"warn": 9, "halve": 9, "stop": 9}
 
@@ -35,7 +62,7 @@ FONT = "Inter, 'Noto Sans TC', 'Microsoft JhengHei', sans-serif"
 
 def colors() -> tuple[str, str]:
     """(up, down) colours following the user's convention setting."""
-    if st.session_state.get("color_mode", "綠漲紅跌") == "紅漲綠跌":
+    if st.session_state.get("color_mode", "green_up") == "red_up":
         return "#f6465d", "#0ecb81"
     return "#0ecb81", "#f6465d"
 
@@ -142,7 +169,7 @@ def show(fig: go.Figure):
 
 
 # ---------------------------------------------------------------- data
-@st.cache_data(show_spinner="載入 1 小時 K 線…")
+@st.cache_data(show_spinner="Loading 1h bars… 載入 K 線")
 def hourly() -> pd.DataFrame:
     h = pd.read_parquet(RAW["klines_1h"])
     return h.sort_values(["symbol", "timestamp"]).reset_index(drop=True)
@@ -164,7 +191,7 @@ def premium_raw() -> pd.DataFrame:
     return pd.read_parquet(RAW["premium_1h"], columns=["timestamp", "symbol", "premium_index_close"])
 
 
-@st.cache_data(show_spinner="整理每日行情…")
+@st.cache_data(show_spinner="Building daily market data… 整理每日行情")
 def daily_market() -> pd.DataFrame:
     """Calendar-day (UTC) bars per coin with funding, premium and the 30-day funding z-score.
 
@@ -207,7 +234,7 @@ def out_parquet(name: str) -> pd.DataFrame:
     return pd.read_parquet(OUT / f"{name}.parquet")
 
 
-@st.cache_data(show_spinner="載入模型預測…")
+@st.cache_data(show_spinner="Loading model predictions… 載入模型預測")
 def bt_base() -> pd.DataFrame:
     """Exactly the frame 05_backtest.py backtests on."""
     D = out_parquet("model_panel")
@@ -242,7 +269,7 @@ def _day_weights(day: pd.DataFrame, score: str, k: int, allocator: str) -> pd.Se
     return pd.concat([B._cap_side(wl, 0.5), -B._cap_side(ws, 0.5)])
 
 
-@st.cache_data(show_spinner="計算每日持倉…")
+@st.cache_data(show_spinner="Computing daily positions… 計算每日持倉")
 def weights(score: str, k: int = 3, allocator: str = "equal") -> pd.DataFrame:
     base = bt_base()
     if k == B.K:
@@ -251,7 +278,7 @@ def weights(score: str, k: int = 3, allocator: str = "equal") -> pd.DataFrame:
     return pd.DataFrame(W).T.sort_index().fillna(0.0)
 
 
-@st.cache_data(show_spinner="回測中…")
+@st.cache_data(show_spinner="Backtesting… 回測中")
 def backtest(score: str, k: int, allocator: str, cost: float, start, end,
              vol_target: float | None, ladder: bool) -> pd.DataFrame:
     base = bt_base()
@@ -281,7 +308,7 @@ def benchmarks(start, end) -> pd.DataFrame:
     b = base[(base["date"] >= start) & (base["date"] <= end)]
     ew = b[b["tradable"]].groupby("date")["ret_long_simple"].mean()
     btc = b[b["symbol"] == "BTCUSDT"].set_index("date")["ret_long_simple"]
-    return pd.DataFrame({"等權做多全部": ew, "BTC 做多": btc}).fillna(0)
+    return pd.DataFrame({"ew": ew, "btc": btc}).fillna(0)
 
 
 def perf(net: pd.Series, turnover: pd.Series | None = None) -> dict:
@@ -308,9 +335,9 @@ def monthly_table(net: pd.Series) -> pd.DataFrame:
     r = net.dropna()
     m = (1 + r).groupby([r.index.year, r.index.month]).prod() - 1
     t = m.unstack()
-    t.columns = [f"{c}月" for c in t.columns]
-    t["全年"] = (1 + r).groupby(r.index.year).prod() - 1
-    t.index.name = "年度"
+    t.columns = [L(f"{c}月", ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][c - 1]) for c in t.columns]
+    t[L("全年", "Year")] = (1 + r).groupby(r.index.year).prod() - 1
+    t.index.name = L("年度", "Year")
     return t
 
 
@@ -328,12 +355,14 @@ def quick_range(choice: str, d0: pd.Timestamp, d1: pd.Timestamp) -> tuple[pd.Tim
 
 
 def date_range_picker(key: str, d0: pd.Timestamp, d1: pd.Timestamp, default: str = "1Y",
-                      options=("1M", "3M", "6M", "YTD", "1Y", "3Y", "全部", "自訂")):
+                      options=("1M", "3M", "6M", "YTD", "1Y", "3Y", "ALL", "CUSTOM")):
     """Pills for quick ranges plus a custom calendar, like a quote terminal."""
-    choice = st.pills("期間", list(options), default=default, key=f"{key}_rng", label_visibility="collapsed") or default
-    if choice == "自訂":
+    names = {"ALL": L("全部", "All"), "CUSTOM": L("自訂", "Custom")}
+    choice = st.pills(L("期間", "Range"), list(options), default=default, key=f"{key}_rng", label_visibility="collapsed",
+                      format_func=lambda o: names.get(o, o)) or default
+    if choice == "CUSTOM":
         lo, hi = quick_range(default, d0, d1)
-        v = st.date_input("自訂日期區間", value=(lo.date(), hi.date()), min_value=d0.date(), max_value=d1.date(),
+        v = st.date_input(L("自訂日期區間", "Custom date range"), value=(lo.date(), hi.date()), min_value=d0.date(), max_value=d1.date(),
                           key=f"{key}_custom")
         if isinstance(v, (tuple, list)) and len(v) == 2:
             return to_utc(v[0]), to_utc(v[1])
@@ -379,7 +408,7 @@ def _live_hyperliquid() -> pd.DataFrame:
 LIVE_SOURCES = [("Binance", _live_binance), ("Bybit", _live_bybit), ("Hyperliquid", _live_hyperliquid)]
 
 
-@st.cache_data(ttl=60, show_spinner="抓取即時資金費率…")
+@st.cache_data(ttl=60, show_spinner="Fetching live funding… 抓取即時資金費")
 def live_quotes() -> tuple[pd.DataFrame, str, list[str]]:
     """Try each exchange in turn (cloud hosts in the US are blocked by Binance and Bybit).
 
@@ -392,7 +421,7 @@ def live_quotes() -> tuple[pd.DataFrame, str, list[str]]:
             if len(df) >= 8:
                 df["fetched_utc"] = pd.Timestamp.now(tz="UTC")
                 return df.reset_index(drop=True), name, errors
-            errors.append(f"{name}: 只有 {len(df)} 檔")
+            errors.append(f"{name}: {len(df)} coins")
         except Exception as e:  # blocked region, timeout, schema change
             errors.append(f"{name}: {type(e).__name__}")
     d = daily_market()
@@ -400,4 +429,4 @@ def live_quotes() -> tuple[pd.DataFrame, str, list[str]]:
     df = pd.DataFrame({"symbol": last["symbol"], "lastFundingRate": last["funding_last"], "premium": last["premium"],
                        "markPrice": last["close"], "next_funding": pd.NaT,
                        "fetched_utc": last["day"] + pd.Timedelta(days=1)}).dropna(subset=["lastFundingRate"])
-    return df.reset_index(drop=True), "最近一次已結算資料", errors
+    return df.reset_index(drop=True), "settled", errors
