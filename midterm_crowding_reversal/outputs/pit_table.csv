@@ -1,0 +1,5 @@
+﻿level,check,result,note
+數值,所有特徵 available_at <= 00:00 UTC；資金費只用已結算值；Ch.02 PITValidator 洩漏檢查,PASS,資金費知識延遲 0–0 小時，負值 0 筆；對照組(明日報酬)被抓到=True
+股票池,合格條件只用 t 之前資料；包含已下市幣種,FAIL（揭露）,上市天數與 30 日成交額只用 t 之前；但資料只有存續合約（無 LUNA、FTT 等），報酬偏高
+代號,合約更名、重新上市（如 1000SHIB）,N/A,19 檔皆為原始代號，無 1000x 或更名；逐一檢查 symbol 清單
+日期,PITValidator 日期單調、缺口 > 5 天,PASS,每檔缺 1h K 棒合計 480 根；缺棒當天不交易

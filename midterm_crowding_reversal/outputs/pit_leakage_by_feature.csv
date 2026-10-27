@@ -1,0 +1,14 @@
+feature,max_abs_corr,flagged
+btc_rvol_tercile,0.0694,False
+corr_btc_30d,0.1016,False
+funding_dispersion,0.0558,False
+funding_last,0.0832,False
+funding_streak,0.0555,False
+funding_z_30d,0.1277,False
+leaky_control,1.0,True
+mom_7d,0.0713,False
+premium_chg_1d,0.1255,False
+premium_mean_1d,0.1284,False
+rev_1d,0.1104,False
+rvol_7d,0.1117,False
+vol_z_7d,0.1145,False

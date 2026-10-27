@@ -1,0 +1,117 @@
+# 加密永續合約擁擠度反轉策略：交易設定（回測前凍結）
+# Frozen 2026-10-26, BEFORE any price, funding or return number was downloaded or viewed.
+# Any later change = new setup_version + a run_log.csv row explaining why.
+# Version rule: thresholds / lookbacks may move inside v1 (and each move is a logged trial);
+# long-only, a different rebalance frequency, or a new cost item => v2.
+
+setup_version: v1
+strategy: crypto_perps_crowding_reversal
+frozen_at: "2026-10-26"
+git_commit_at_freeze: 0bb3fd0c
+
+data:
+  source: "data.binance.vision monthly archives (Binance USDT-M, public, no API key)"
+  downloader: midterm_crowding_reversal/data/download_binance.py
+  files:
+    klines_1h: data/crypto/market/perps_1h.parquet
+    premium_1h: data/crypto/market/premium_index_1h.parquet
+    funding: data/crypto/market/funding_rate.parquet     # actual settlement records
+  months: ["2020-01", "2025-12"]
+
+universe:
+  symbols: [AAVEUSDT, ADAUSDT, APTUSDT, ATOMUSDT, AVAXUSDT, BNBUSDT, BTCUSDT, COMPUSDT,
+            DOGEUSDT, DOTUSDT, ETHUSDT, INJUSDT, LINKUSDT, MKRUSDT, NEARUSDT, SOLUSDT,
+            SUIUSDT, UNIUSDT, XRPUSDT]          # the textbook case-study universe (19)
+  min_listing_days: 60                         # days of 1h bars before t
+  min_adv_usdt: 20_000_000                     # 30-day mean daily quote volume, data < t
+  must_have_exec_bar: true                     # no 01:00 bar on day t (or t+1) => not tradable
+  known_bias: "survivors only: delisted perps (e.g. LUNA) are absent => results biased upward"
+
+decision_schedule:
+  signal_time: "00:00 UTC daily"
+  execution: "open of the 01:00 UTC 1h bar"
+  holding: "24h, to the next day's 01:00 UTC open"
+
+admissible_information:
+  prices: "1h bars with open time < 00:00 UTC (i.e. closed by 00:00)"
+  premium: "1h premium-index bars with open time < 00:00 UTC"
+  funding: "settlements with funding_time <= 00:00 UTC (settled values only, never the live estimate)"
+  max_lookback_days: 30
+
+label:
+  ret_long: "log(px_exec_next / px_exec) - funding_hold"
+  funding_hold: "sum of actual settlements in (01:00 t, 01:00 t+1]; never assume 3 per day"
+  sign_rule: "funding > 0 => longs pay shorts; a short earns -price_return + funding_hold"
+  ml_target: "ret_long minus its cross-sectional mean on date t"
+  overlap: "1-day label, daily decisions => labels do not overlap"
+
+features:   # all from admissible information; ranked cross-sectionally to [-0.5, 0.5] each day
+  signal: [funding_z_30d, funding_last, funding_streak, premium_mean_1d, premium_chg_1d,
+           rev_1d, mom_7d, vol_z_7d]
+  state: [rvol_7d, btc_rvol_tercile, funding_dispersion, corr_btc_30d]
+  dedup_rule: "if |spearman rho| > 0.8 on training data, keep the one listed first"
+
+score_to_trade:
+  score: "predicted 24h funding-adjusted cross-sectional return"
+  long: top 3
+  short: bottom 3
+  sizing: "equal weight, 0.5/3 per name on each side"
+  no_trade: "fewer than 8 tradable names, or the drawdown ladder's stop is active"
+
+constraints:
+  gross_exposure: 1.0
+  net_exposure: 0.0
+  max_weight_per_name: 0.20
+  leverage: none
+
+models:
+  rule: {score: "-funding_z_30d"}
+  ridge: {alphas: "np.logspace(-3, 4, 8)", selection: "inner validation IC (last 20% of train)"}
+  lightgbm:
+    objective: l1
+    max_depth: 3
+    num_leaves: [7, 15]
+    learning_rate: 0.03
+    min_child_samples: [100, 300]
+    feature_fraction: [0.6, 1.0]
+    n_estimators_max: 1000
+    early_stopping_rounds: 50
+    max_tuning_trials: 8          # 2 x 2 x 2 grid; cap from the guide is 30
+  hmm: "optional in the proposal; not run in v1"
+
+validation:
+  scheme: walk_forward_expanding
+  first_val: "2021-01-01"
+  last_val: "2024-12-31"
+  folds: "16 calendar quarters"
+  min_train_days: 365
+  purge_days: 1                   # = label length; crypto trades 7x24 so days = calendar days
+  embargo: none                   # training always precedes validation
+  tuning: "nested: last 20% of each training window is inner validation"
+  primary_metric: "daily Spearman IC, Newey-West 95% CI"
+
+costs:
+  taker_fee_bps: 5
+  half_spread_bps: 2
+  per_side_bps: 7
+  funding: "charged/received from actual settlements"
+  sweep_bps: [0, 5, 10, 15, 20, 30, 40]
+  breakeven: "c* = gross return / turnover"
+
+portfolio_extras:
+  allocator_compare: "equal weight vs inverse 20d volatility (same names, same sides)"
+  vol_target: "scale gross by 20% / realized 20d strategy vol at t-1, capped at 1.0"
+  drawdown_ladder: {warn: 0.05, halve: 0.10, stop: 0.15, flat: 0.20}
+  regime: "BTC 30d realized vol terciles, thresholds from expanding window up to t-1"
+  stress: ["2022-05 LUNA", "2022-11 FTX", "spread x3"]
+
+holdout:
+  start: "2025-01-01"
+  end: "2025-12-31"
+  rule: "sealed in code; opened ONCE after the spec is frozen, only with the owner's approval"
+  lock_file: midterm_crowding_reversal/outputs/HOLDOUT_OPENED.lock
+  confirmatory_test: "net Sharpe > 0 and IC CI lower bound > 0"
+
+falsification:   # either one => stop and report honestly
+  - "validation daily IC (chosen model) Newey-West 95% CI contains 0"
+  - "net Sharpe at 7 bp per side <= 0"

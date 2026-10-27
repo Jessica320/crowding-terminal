@@ -1,0 +1,151 @@
+{
+  "rows_hourly": 700044,
+  "rows_premium": 697892,
+  "rows_funding": 87695,
+  "panel_rows": 29155,
+  "symbols": 19,
+  "panel_first": "2020-01-02",
+  "panel_last": "2024-12-31",
+  "duplicates": {
+    "klines": 0,
+    "premium": 0,
+    "funding": 0
+  },
+  "ohlc_violations": 0,
+  "non_positive_prices": 0,
+  "missing_hourly_bars": {
+    "AAVEUSDT": 0,
+    "ADAUSDT": 0,
+    "APTUSDT": 0,
+    "ATOMUSDT": 0,
+    "AVAXUSDT": 0,
+    "BNBUSDT": 0,
+    "BTCUSDT": 0,
+    "COMPUSDT": 0,
+    "DOGEUSDT": 0,
+    "DOTUSDT": 0,
+    "ETHUSDT": 0,
+    "INJUSDT": 0,
+    "LINKUSDT": 0,
+    "MKRUSDT": 120,
+    "NEARUSDT": 120,
+    "SOLUSDT": 120,
+    "SUIUSDT": 0,
+    "UNIUSDT": 0,
+    "XRPUSDT": 120
+  },
+  "first_bar": {
+    "AAVEUSDT": "2020-10-16",
+    "ADAUSDT": "2020-01-31",
+    "APTUSDT": "2022-10-19",
+    "ATOMUSDT": "2020-02-07",
+    "AVAXUSDT": "2020-09-23",
+    "BNBUSDT": "2020-02-10",
+    "BTCUSDT": "2020-01-01",
+    "COMPUSDT": "2020-06-30",
+    "DOGEUSDT": "2020-07-10",
+    "DOTUSDT": "2020-08-22",
+    "ETHUSDT": "2020-01-01",
+    "INJUSDT": "2022-08-17",
+    "LINKUSDT": "2020-01-17",
+    "MKRUSDT": "2020-08-13",
+    "NEARUSDT": "2020-10-15",
+    "SOLUSDT": "2020-09-14",
+    "SUIUSDT": "2023-05-03",
+    "UNIUSDT": "2020-09-18",
+    "XRPUSDT": "2020-01-06"
+  },
+  "non_8h_settlements": {
+    "SOLUSDT": 101
+  },
+  "settlements_per_holding_day": {
+    "3.0": 26973,
+    "4.0": 1,
+    "6.0": 1,
+    "11.0": 1,
+    "12.0": 7
+  },
+  "eligible_missing_exec_bar": 8,
+  "days_fewer_than_8_tradable": 261,
+  "first_tradable_day": "2020-08-30",
+  "tradable_min_max": [
+    0,
+    19
+  ],
+  "tradable_mean_2021_2024": 17.06091718001369,
+  "funding_delay_h": [
+    0.0,
+    0.0
+  ],
+  "negative_delay": 0,
+  "pit_dates_ok": true,
+  "leak_threshold": 0.3,
+  "leakage": [
+    {
+      "feature": "btc_rvol_tercile",
+      "max_abs_corr": 0.0694,
+      "flagged": false
+    },
+    {
+      "feature": "corr_btc_30d",
+      "max_abs_corr": 0.1016,
+      "flagged": false
+    },
+    {
+      "feature": "funding_dispersion",
+      "max_abs_corr": 0.0558,
+      "flagged": false
+    },
+    {
+      "feature": "funding_last",
+      "max_abs_corr": 0.0832,
+      "flagged": false
+    },
+    {
+      "feature": "funding_streak",
+      "max_abs_corr": 0.0555,
+      "flagged": false
+    },
+    {
+      "feature": "funding_z_30d",
+      "max_abs_corr": 0.1277,
+      "flagged": false
+    },
+    {
+      "feature": "leaky_control",
+      "max_abs_corr": 1.0,
+      "flagged": true
+    },
+    {
+      "feature": "mom_7d",
+      "max_abs_corr": 0.0713,
+      "flagged": false
+    },
+    {
+      "feature": "premium_chg_1d",
+      "max_abs_corr": 0.1255,
+      "flagged": false
+    },
+    {
+      "feature": "premium_mean_1d",
+      "max_abs_corr": 0.1284,
+      "flagged": false
+    },
+    {
+      "feature": "rev_1d",
+      "max_abs_corr": 0.1104,
+      "flagged": false
+    },
+    {
+      "feature": "rvol_7d",
+      "max_abs_corr": 0.1117,
+      "flagged": false
+    },
+    {
+      "feature": "vol_z_7d",
+      "max_abs_corr": 0.1145,
+      "flagged": false
+    }
+  ],
+  "panel_hash": "b55939d58198"
+}

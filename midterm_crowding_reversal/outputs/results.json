@@ -1,0 +1,45 @@
+{
+  "chosen": "lgbm",
+  "signal": {
+    "ic": 0.059363626609025125,
+    "lo": 0.04522702427567067,
+    "hi": 0.07350022894237958,
+    "icir": 4.0669411095641586,
+    "pos_fold_share": 1.0
+  },
+  "portfolio": {
+    "gross_sharpe": 0.27024755128024897,
+    "max_dd": -0.8521948512998497,
+    "ann_turnover": 386.82425568065725,
+    "bench_ew_sharpe": 1.0830318184790875,
+    "rule_sharpe": 0.5904996813280372
+  },
+  "cost": {
+    "net_sharpe": -0.27124522354929714,
+    "lo": -1.2687664919065695,
+    "hi": 0.7262760448079753,
+    "breakeven_bps": 3.4931068966185466,
+    "zone": "硬底線（< 1 倍成本）"
+  },
+  "risk": {
+    "overlay_sharpe": 0.12447313243775954,
+    "overlay_mdd": -0.1400147339127027
+  },
+  "inference": {
+    "dsr": 0.008473172423745064,
+    "n_trials": 29,
+    "mtrl_years": Infinity
+  },
+  "pattern_validation": "只有在成本前為正（扣成本後消失）",
+  "falsified": {
+    "ic_ci_contains_0": false,
+    "net_sharpe_le_0": true
+  },
+  "worst_regime": {
+    "regime": "中波動・下跌",
+    "days": 184,
+    "sharpe": -1.9198470720293623,
+    "ann_ret": -0.7337732178969212,
+    "max_dd": -0.3597660024731687
+  }
+}
