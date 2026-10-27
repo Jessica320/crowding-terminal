@@ -339,3 +339,65 @@ def date_range_picker(key: str, d0: pd.Timestamp, d1: pd.Timestamp, default: str
             return to_utc(v[0]), to_utc(v[1])
         return lo, hi
     return quick_range(choice, d0, d1)
+
+
+# ---------------------------------------------------------------- live quotes
+def _live_binance() -> pd.DataFrame:
+    from app.live_signal import fetch_live
+    return fetch_live(timeout=6)
+
+
+def _live_bybit() -> pd.DataFrame:
+    import requests
+    js = requests.get("https://api.bybit.com/v5/market/tickers", params={"category": "linear"}, timeout=6).json()
+    df = pd.DataFrame(js["result"]["list"])
+    df = df[df["symbol"].isin(SYMS)].copy()
+    for c in ["markPrice", "indexPrice", "fundingRate"]:
+        df[c] = df[c].astype(float)
+    out = pd.DataFrame({"symbol": df["symbol"], "lastFundingRate": df["fundingRate"],
+                        "premium": df["markPrice"] / df["indexPrice"] - 1, "markPrice": df["markPrice"],
+                        "next_funding": pd.to_datetime(df["nextFundingTime"].astype("int64"), unit="ms", utc=True)})
+    return out
+
+
+def _live_hyperliquid() -> pd.DataFrame:
+    """Hyperliquid perps settle hourly; scale to an 8h-equivalent rate so the ranking is comparable."""
+    import requests
+    meta, ctx = requests.post("https://api.hyperliquid.xyz/info", json={"type": "metaAndAssetCtxs"}, timeout=6).json()
+    rows = []
+    for a, c in zip(meta["universe"], ctx):
+        sym = f"{a['name']}USDT"
+        if sym in SYMS and c.get("markPx") and c.get("oraclePx"):
+            mark, orc = float(c["markPx"]), float(c["oraclePx"])
+            rows.append({"symbol": sym, "lastFundingRate": float(c["funding"]) * 8, "premium": mark / orc - 1, "markPrice": mark})
+    now = pd.Timestamp.now(tz="UTC")
+    out = pd.DataFrame(rows)
+    out["next_funding"] = now.ceil("h")
+    return out
+
+
+LIVE_SOURCES = [("Binance", _live_binance), ("Bybit", _live_bybit), ("Hyperliquid", _live_hyperliquid)]
+
+
+@st.cache_data(ttl=60, show_spinner="抓取即時資金費率…")
+def live_quotes() -> tuple[pd.DataFrame, str, list[str]]:
+    """Try each exchange in turn (cloud hosts in the US are blocked by Binance and Bybit).
+
+    Returns (frame, source, errors). Falls back to the last settled day in the dataset.
+    """
+    errors = []
+    for name, fn in LIVE_SOURCES:
+        try:
+            df = fn()
+            if len(df) >= 8:
+                df["fetched_utc"] = pd.Timestamp.now(tz="UTC")
+                return df.reset_index(drop=True), name, errors
+            errors.append(f"{name}: 只有 {len(df)} 檔")
+        except Exception as e:  # blocked region, timeout, schema change
+            errors.append(f"{name}: {type(e).__name__}")
+    d = daily_market()
+    last = d[d["day"] == d["day"].max()]
+    df = pd.DataFrame({"symbol": last["symbol"], "lastFundingRate": last["funding_last"], "premium": last["premium"],
+                       "markPrice": last["close"], "next_funding": pd.NaT,
+                       "fetched_utc": last["day"] + pd.Timedelta(days=1)}).dropna(subset=["lastFundingRate"])
+    return df.reset_index(drop=True), "最近一次已結算資料", errors

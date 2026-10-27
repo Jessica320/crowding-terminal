@@ -544,30 +544,26 @@ def page_backtest():
 
 # ==================================================================== 策略：即時訊號
 def page_live():
-    C.page_header("即時訊號（Shadow mode）", "從 Binance 公開 API 抓目前的資金費率與溢價，依規則模型排擁擠度。只觀察、不下單。")
+    C.page_header("即時訊號（Shadow mode）", "從交易所公開 API 抓目前的資金費率與溢價（Binance → Bybit → Hyperliquid 依序嘗試），依規則模型排擁擠度。只觀察、不下單。")
     c1, c2 = st.columns([1, 4])
     if c1.button("重新整理", icon=":material/refresh:", type="primary", use_container_width=True):
-        st.cache_data.clear()
-    live, src = pd.DataFrame(), ""
-    try:
-        from app.live_signal import fetch_live, rank
-        hist = C.funding_raw()
-        live = rank(fetch_live(), hist)
-        src = f"Binance 即時資料 · {live['fetched_utc'].iloc[0]:%Y-%m-%d %H:%M} UTC"
-        c2.success(src)
-    except Exception as e:  # offline -> cached copy
-        if (C.OUT / "live_cache.parquet").exists():
-            live = pd.read_parquet(C.OUT / "live_cache.parquet")
-            c2.warning(f"連不到 Binance（{type(e).__name__}），顯示上次存的快取。")
-        else:
-            c2.error(f"連不到 Binance（{type(e).__name__}），也沒有快取。先執行 `python app/live_signal.py`。")
+        C.live_quotes.clear()
+    from app.live_signal import rank
+    raw, src, errs = C.live_quotes()
+    live = rank(raw, C.funding_raw()) if len(raw) else pd.DataFrame()
+    t = live["fetched_utc"].iloc[0] if len(live) else None
+    if src == "最近一次已結算資料":
+        c2.warning(f"目前連不到交易所即時 API（{'、'.join(errs)}），改顯示資料集最後一天（{t:%Y-%m-%d} 00:00 UTC）的已結算資金費。")
+    else:
+        note = f"（{'、'.join(e.split(':')[0] for e in errs)} 連不到，已自動改用 {src}）" if errs else ""
+        c2.success(f"{src} 即時資料 · {t:%Y-%m-%d %H:%M} UTC {note}")
     if live.empty:
         return
     up, down = C.colors()
     key = "funding_z_est" if "funding_z_est" in live else "lastFundingRate"
     sh, lg = live[live["shadow_action"].str.startswith("做空")], live[live["shadow_action"].str.startswith("做多")]
     C.kpi_row([
-        ("下次資金費結算", f"{pd.to_datetime(live['next_funding']).min():%H:%M} UTC", "", ""),
+        ("下次資金費結算", f"{pd.to_datetime(live['next_funding']).min():%H:%M} UTC" if pd.to_datetime(live['next_funding']).notna().any() else "—", f"資料來源：{src}", ""),
         ("平均預估資金費（每期）", f"{live['lastFundingRate'].mean() * 1e4:+.2f} bp", f"年化約 {live['lastFundingRate'].mean() * 3 * 365:+.1%}",
          C.tone(live['lastFundingRate'].mean())),
         ("做空候選", "、".join(sh["symbol"].str.replace("USDT", "")), "多方最擁擠", "down"),
